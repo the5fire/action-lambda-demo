@@ -8,30 +8,28 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.12
-
-    - name: Install & zip
+    - name: get login
       run: |
-        pip install --upgrade pip
-        pip install -r ./requirements.txt --target .
-        zip -r lambda_function.zip . -x '*.git*'
+        aws ecr get-login-password --region ${{ secrets.AWS_REGION}}| docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
-    - name: Deploy to AWS Lambda
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+    - name: update image
 
       run: |
-        # Assuming you have an IAM role ARN for your Lambda function
-        aws s3 cp ./lambda_function.zip s3://${{ secrets.BUCKET_NAME }}/
-        aws lambda update-function-code --function-name ${{ secrets.FUNCTION_NAME }} \
-          --s3-bucket ${{ secrets.BUCKET_NAME }} --s3-key lambda_function.zip
+        docker build -t docker-image:test .
+        docker tag docker-image:test ${{secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${{ secrets.FUNCTION_NAME }}:latest
+        docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${{ secrets.FUNCTION_NAME }}:latest
+
+    - name: update function
+      run: |
+         aws lambda update-function-code \
+            --function-name ${{ secrets.FUNCTION_NAME }} \
+            --image-uri ${{secrets.AWS_ACCOUNT_ID}}.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/${{ secrets.FUNCTION_NAME }}:latest
