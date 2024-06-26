@@ -1,0 +1,37 @@
+name: Deploy Lambda Function
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.12
+
+    - name: Install & zip
+      run: |
+        pip install --upgrade pip
+        pip install -r ./requirements.txt --target .
+        zip -r lambda_function.zip . -x '*.git*'
+
+    - name: Deploy to AWS Lambda
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+
+      run: |
+        # Assuming you have an IAM role ARN for your Lambda function
+        aws lambda update-function-code \
+          --function-name helloworld \
+          --zip-file fileb://lambda_function.zip
